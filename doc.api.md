@@ -1,83 +1,78 @@
-# Documentação Resumida — FIPE API v2
+# Documentação do Dataset — fipeX Veículos Brasil (`alanwgt/fipex-veiculos-brasil`)
 
-Resumo dos principais tópicos para consumo da API REST da Tabela FIPE (`fipe.api.br`).
+Resumo técnico do dataset público da Tabela FIPE hospedado no Hugging Face e utilizado neste pipeline de dados.
 
 ---
 
 ## 1. Visão Geral
 
-- **Base URL:** `https://fipe.api.br/api/v2`
-- **Formato de resposta:** JSON (`application/json; charset=utf-8`)
-- **Tipos de veículos (`{vehicleType}`):**
-  - `cars` — Carros e utilitários pequenos (código `1`)
-  - `motorcycles` — Motos (código `2`)
-  - `trucks` — Caminhões e micro-ônibus (código `3`)
+- **Repositório Hugging Face:** [https://huggingface.co/datasets/alanwgt/fipex-veiculos-brasil](https://huggingface.co/datasets/alanwgt/fipex-veiculos-brasil)
+- **Repositório GitHub / Releases:** [https://github.com/fipex-labs/dataset](https://github.com/fipex-labs/dataset)
+- **Portal / API Relacionada:** [https://fipex.com.br/dados-e-api](https://fipex.com.br/dados-e-api)
+- **Licença:** `CC0-1.0` (Domínio Público — uso livre sem restrições)
+- **Categorias:** `tabular-regression`, `time-series-forecasting` (`1M < n < 10M` registros no histórico completo)
 
 ---
 
-## 2. Principais Endpoints
+## 2. Organização e Arquivos Disponíveis
 
-| Método | Endpoint | Descrição |
+O repositório disponibiliza tanto o histórico completo quanto *dumps* mensais individuais por período de referência:
+
+### 2.1. Dumps Mensais por Período (`YYYY/MM/`)
+Localizados em pastas por ano e mês (ex.: `2026/09/`, `2026/10/`):
+
+| Arquivo | Formato | Descrição |
 | :--- | :--- | :--- |
-| `GET` | `/references` | Lista os meses de referência disponíveis na FIPE (`code`, `month`). |
-| `GET` | `/{vehicleType}/brands` | Lista todas as marcas do tipo de veículo (`code`, `name`). |
-| `GET` | `/{vehicleType}/brands/{brandId}/models` | Lista todos os modelos de uma marca (`code`, `name`). |
-| `GET` | `/{vehicleType}/brands/{brandId}/models/{modelId}/years` | Lista os anos/combustíveis disponíveis para um modelo (`code`, `name`). |
-| `GET` | `/{vehicleType}/brands/{brandId}/models/{modelId}/years/{yearId}` | Retorna o preço e os dados completos FIPE do veículo. |
-| `GET` | `/{vehicleType}/{fipeCode}/years` | Lista os anos disponíveis diretamente pelo código FIPE (ex.: `002182-2`). |
-| `GET` | `/{vehicleType}/{fipeCode}/years/{yearId}` | Consulta preço e detalhes usando o código FIPE e o ano. |
+| `YYYY/MM/fipex-prices.csv` | CSV (TSV `\t`) | Preços do mês de referência como publicados pela FIPE |
+| `YYYY/MM/fipex-prices.parquet` | Parquet | Mesmos dados do período em formato colunar otimizado |
 
-> **Parâmetro opcional:** Todos os endpoints aceitam `?reference={code}` na query string para consultar valores de uma tabela de referência histórica específica.
+**URLs diretas (LFS Resolve) utilizadas no projeto:**
+- **Setembro/2026 (`2026/09`):**
+  `https://huggingface.co/datasets/alanwgt/fipex-veiculos-brasil/resolve/main/2026/09/fipex-prices.csv`
+- **Outubro/2026 (`2026/10`):**
+  `https://huggingface.co/datasets/alanwgt/fipex-veiculos-brasil/resolve/main/2026/10/fipex-prices.csv`
 
----
+### 2.2. Histórico Completo (Raiz / Releases)
 
-## 3. Exemplo Prático de Consulta
-
-### Requisição
-```bash
-curl https://fipe.api.br/api/v2/cars/brands/56/models/9984/years/2025-6
-```
-- `cars`: Tipo do veículo (Carros)
-- `56`: Código da marca (**Toyota**)
-- `9984`: Código do modelo (**Corolla Altis 1.8 16V Aut. (Híbrido)**)
-- `2025-6`: Código do ano/combustível (`2025` Híbrido)
-
-### Resposta (JSON)
-```json
-{
-  "vehicleType": 1,
-  "price": "R$ 173.645,00",
-  "brand": "Toyota",
-  "model": "Corolla Altis 1.8 16V Aut. (Híbrido)",
-  "modelYear": 2025,
-  "fuel": "Híbrido",
-  "codeFipe": "002182-2",
-  "referenceMonth": "outubro de 2026",
-  "fuelAcronym": "H"
-}
-```
+| Arquivo | Versão | Formato | Descrição |
+| :--- | :--- | :--- | :--- |
+| `fipex-prices-latest.csv` | Original | CSV (`\t`) | Dados históricos com os nomes originais de cada época |
+| `fipex-prices-latest-merged.csv` | Consolidada | CSV (`\t`) | Modelos renomeados unificados sob a nomenclatura atual |
+| `fipex-prices-latest.parquet` | Original | Parquet | Versão original em formato colunar comprimido |
+| `fipex-prices-latest-merged.parquet` | Consolidada | Parquet | Versão consolidada em formato colunar comprimido |
 
 ---
 
-## 4. Limites de Requisição (Rate Limit & Throttling)
+## 3. Estrutura das Colunas (Schema Original — 12 Colunas)
 
-A API controla o tráfego através dos seguintes cabeçalhos HTTP de resposta:
+Todos os arquivos do dataset seguem a estrutura abaixo:
 
-- **Limite por minuto (Throttling):**
-  - `x-throttle-limit`: `50` requisições por minuto.
-  - `x-throttle-remaining`: Requisições restantes na janela atual de 1 minuto.
-  - `x-throttle-reset`: Timestamp Unix de quando a janela de 1 minuto será reiniciada.
-- **Limite diário (Rate Limit):**
-  - `x-ratelimit-limit`: `500` requisições por dia (plano gratuito sem token) ou até `1000+` com token.
-  - `x-ratelimit-remaining`: Requisições restantes no dia.
-  - `x-ratelimit-reset`: Tempo restante (em segundos) para o reset diário.
-- **Autenticação opcional:**
-  - Envie o header `X-Subscription-Token: SEU_TOKEN` caso possua um token cadastrado para ampliar a cota diária.
+| Coluna | Tipo Original | Descrição |
+| :--- | :--- | :--- |
+| `tipo_veiculo` | `string` | Categoria do veículo (`carro`, `moto`, `caminhão`) |
+| `codigo_fipe` | `string` | Código único do veículo na Tabela FIPE (ex.: `002182-2`) |
+| `nome_modelo` | `string` | Nome do modelo (ex.: `Corolla Altis 1.8 16V Aut. (Híbrido)`) |
+| `nome_marca` | `string` | Nome do fabricante/marca (ex.: `Toyota`, `Fiat`, `VW - VolksWagen`) |
+| `nome_combustivel` | `string` | Tipo de combustível por extenso (`Gasolina`, `Diesel`, `Álcool`, `Híbrido`, etc.) |
+| `sigla_combustivel` | `string` | Sigla do combustível (`g`, `e`, `d`, `l`, `f`, `h`, `n`) |
+| `ano_modelo` | `int` / `NULL` | Ano de fabricação do modelo (ou `NULL` quando `zero_km = true`) |
+| `zero_km` | `bool` | Indica se o veículo é Zero KM (`true` ou `false`) |
+| `valor_centavos` | `int` | Preço do veículo em centavos (evita imprecisão de ponto flutuante) |
+| `valor_formatado` | `string` | Preço formatado em Reais (ex.: `R$ 173.645,00`) |
+| `mes_referencia` | `int` | Mês de referência da tabela FIPE (`1` a `12`) |
+| `ano_referencia` | `int` | Ano de referência da tabela FIPE (ex.: `2026`) |
 
 ---
 
-## 5. Arquivos Locais Gerados no Projeto
+## 4. Uso no Pipeline Local (`projeto-jr`)
 
-- **`marcas_modelos_fipe.csv`**: Tabela CSV local contendo todas as **108 marcas** e **7.386 modelos** de carros (`brand_code`, `brand_name`, `model_code`, `model_name`).
-- **`fetch_fipe_marcas_modelos.py`**: Script Python que percorre todas as marcas na API respeitando automaticamente o limite de *throttling* (`x-throttle-remaining` / HTTP `429`) e salva o CSV local.
-
+1. **Coleta e Comparação (`comparar_fipe_set_out.py`):**
+   - Baixa os dumps `2026/09/fipex-prices.csv` (`51.012` registros) e `2026/10/fipex-prices.csv` (`51.247` registros) do Hugging Face.
+   - Realiza o `INNER JOIN` pelas chaves `(tipo_veiculo, codigo_fipe, sigla_combustivel, ano_modelo, zero_km)` tratando veículos Zero-KM (`IS NOT DISTINCT FROM`) e gera `fipe_comparacao_set_out.csv` (`51.003` registros) na raiz e em `raw/`.
+2. **Ingestão (`pipeline/ingestao.py`):**
+   - Carrega `raw/fipe_comparacao_set_out.csv` para a tabela `raw.fipe_comparacao_set_out` no banco DuckDB (`fipe.duckdb`) com todas as colunas em `VARCHAR`.
+3. **Transformação (`pipeline/transformacao.py`):**
+   - Lê `raw.fipe_comparacao_set_out`, seleciona as colunas de negócio, adiciona a coluna `variacao_mes` (`Subiu`, `Caiu` ou `Estável`) e grava tanto em `refined.fipe_comparacao_set_out` no `fipe.duckdb` quanto em `refined/refined.fipe_comparacao_set_out.csv`.
+4. **Visualização (`pipeline/visualizacao_html.py` e `ui.py`):**
+   - `uv run python -m pipeline.visualizacao_html`: abre a página HTML temática (azul, verde e amarelo) em `http://localhost:8000` com busca por nome do carro, placa ou código FIPE.
+   - `uv run python ui.py`: abre o DuckDB UI em `http://localhost:4213`.
