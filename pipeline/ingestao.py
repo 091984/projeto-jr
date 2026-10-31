@@ -45,7 +45,7 @@ from pipeline.db import PASTA_RAW, conectar, criar_schema, gravar
 SCHEMA = "raw"
 
 ARQUIVOS_TABELAS = {
-    "marcas_modelos_fipe.csv.gz": "marcas_modelos_fipe",
+    "marcas_modelos_fipe.csv": "marcas_modelos_fipe",
 }
 
 
