@@ -76,7 +76,7 @@ def main() -> None:
             ON out.tipo_veiculo = set_tb.tipo_veiculo
            AND out.codigo_fipe = set_tb.codigo_fipe
            AND out.sigla_combustivel = set_tb.sigla_combustivel
-           AND out.ano_modelo = set_tb.ano_modelo
+           AND out.ano_modelo IS NOT DISTINCT FROM set_tb.ano_modelo
            AND out.zero_km = set_tb.zero_km
         ORDER BY out.tipo_veiculo, out.nome_marca, out.nome_modelo, out.ano_modelo
         """
