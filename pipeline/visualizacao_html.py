@@ -16,12 +16,13 @@ Regras e motivações:
    - Busca por código FIPE: filtra por `codigo_fipe` (ex.: `002182-2`).
    Motivo: permitir localizar rapidamente qualquer veículo entre os 51.003
    registros sem travar o navegador.
-4. EXIBIÇÃO DO RESULTADO NA TELA:
+4. EXIBIÇÃO DO RESULTADO NA TELA E PUBLICAÇÃO ESTÁTICA (GITHUB PAGES):
    Mostra imediatamente na tela (sem recarregar a página) os resultados com:
    Marca, Modelo, Código FIPE, Ano (ou Zero KM), Combustível, Preço Setembro,
    Preço Outubro, Diferença (R$) e Variação no Mês (`variacao_mes`) com destaque
-   visual por cor.
-   Motivo: conferência visual rápida e comparativa da variação mensal de preços.
+   visual por cor. Também exporta `index.html` e `dados_fipe.json` na raiz para
+   funcionamento público via GitHub Pages sem depender de servidor local.
+   Motivo: conferência visual rápida tanto local quanto pública na web.
 5. EXECUÇÃO, SAÍDA E ERRO:
    - Antes de subir o servidor, verifica se `fipe.duckdb` e a tabela
      `refined.fipe_comparacao_set_out` existem; se faltarem, orienta a rodar a
@@ -38,7 +39,10 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pipeline.db import PASTA_RAW, conectar
 
-CAMINHO_BANCO = PASTA_RAW.parent / "fipe.duckdb"
+RAIZ = PASTA_RAW.parent
+CAMINHO_BANCO = RAIZ / "fipe.duckdb"
+CAMINHO_INDEX_HTML = RAIZ / "index.html"
+CAMINHO_DADOS_JSON = RAIZ / "dados_fipe.json"
 PORTA = 8000
 
 HTML_PAGINA = """<!DOCTYPE html>
@@ -156,16 +160,6 @@ HTML_PAGINA = """<!DOCTYPE html>
       font-size: 0.9rem;
       color: var(--azul);
       font-weight: 600;
-    }
-    .badge-placa {
-      display: inline-block;
-      background: var(--azul);
-      color: var(--amarelo);
-      border: 2px solid var(--amarelo);
-      padding: 4px 12px;
-      border-radius: 6px;
-      font-weight: 800;
-      letter-spacing: 1px;
     }
     .resultados-box {
       background: rgba(255, 255, 255, 0.97);
@@ -290,10 +284,65 @@ HTML_PAGINA = """<!DOCTYPE html>
   </div>
 
   <script>
+    let cacheEstatico = null;
+
     function classeVariacao(texto) {
       if (texto.startsWith("Subiu")) return "tag-subiu";
       if (texto.startsWith("Caiu")) return "tag-caiu";
       return "tag-estavel";
+    }
+
+    async function buscarDados(carro, codigo, tipo) {
+      try {
+        const params = new URLSearchParams({ carro, codigo, tipo });
+        const resp = await fetch("/api/busca?" + params.toString());
+        if (resp.ok) {
+          return await resp.json();
+        }
+      } catch (_) {
+        // Fallback automático para modo estático (GitHub Pages)
+      }
+
+      if (!cacheEstatico) {
+        const respJson = await fetch("dados_fipe.json");
+        cacheEstatico = await respJson.json();
+      }
+
+      const termos = carro ? carro.toLowerCase().split(/\\s+/).filter(Boolean) : [];
+      const codFiltro = codigo ? codigo.toLowerCase() : "";
+
+      const filtrados = cacheEstatico.filter(r => {
+        if (tipo && r[0] !== tipo) return false;
+        if (codFiltro && !String(r[1] || "").toLowerCase().includes(codFiltro)) return false;
+        if (termos.length > 0) {
+          const marca = String(r[2] || "").toLowerCase();
+          const modelo = String(r[3] || "").toLowerCase();
+          for (const t of termos) {
+            if (!marca.includes(t) && !modelo.includes(t)) return false;
+          }
+        }
+        return true;
+      });
+
+      const itens = filtrados.slice(0, 100).map(r => ({
+        tipo_veiculo: r[0],
+        codigo_fipe: r[1],
+        nome_marca: r[2],
+        nome_modelo: r[3],
+        sigla_combustivel: r[4],
+        ano_modelo: r[5],
+        zero_km: r[6],
+        valor_formatado_set: r[7],
+        valor_formatado_out: r[8],
+        diferenca_reais: r[9],
+        variacao_percentual: r[10],
+        variacao_mes: r[11],
+      }));
+
+      return {
+        total_encontrado: filtrados.length,
+        itens,
+      };
     }
 
     async function executarBusca(event) {
@@ -302,10 +351,7 @@ HTML_PAGINA = """<!DOCTYPE html>
       const codigo = document.getElementById("input-codigo").value.trim();
       const tipo = document.getElementById("select-tipo").value;
 
-      const params = new URLSearchParams({ carro, codigo, tipo });
-      const resp = await fetch("/api/busca?" + params.toString());
-      const dados = await resp.json();
-
+      const dados = await buscarDados(carro, codigo, tipo);
       const infoResultado = document.getElementById("info-resultado");
       const tbody = document.getElementById("corpo-tabela");
 
@@ -323,7 +369,7 @@ HTML_PAGINA = """<!DOCTYPE html>
           <td>${item.nome_marca}</td>
           <td><strong>${item.nome_modelo}</strong></td>
           <td>${item.zero_km === "true" ? "Zero KM" : (item.ano_modelo || "Zero KM")}</td>
-          <td>${item.sigla_combustivel.toUpperCase()}</td>
+          <td>${String(item.sigla_combustivel || "").toUpperCase()}</td>
           <td>${item.valor_formatado_set}</td>
           <td><strong>${item.valor_formatado_out}</strong></td>
           <td>R$ ${Number(item.diferenca_reais).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
@@ -363,6 +409,33 @@ def verificar_banco_e_tabela():
         )
         sys.exit(1)
     return con
+
+
+def exportar_arquivos_estaticos(con) -> None:
+    CAMINHO_INDEX_HTML.write_text(HTML_PAGINA, encoding="utf-8")
+    linhas = con.execute(
+        """
+        SELECT
+            tipo_veiculo,
+            codigo_fipe,
+            nome_marca,
+            nome_modelo,
+            sigla_combustivel,
+            ano_modelo,
+            zero_km,
+            valor_formatado_set,
+            valor_formatado_out,
+            diferenca_reais,
+            variacao_percentual,
+            variacao_mes
+        FROM refined.fipe_comparacao_set_out
+        ORDER BY nome_marca, nome_modelo, ano_modelo DESC
+        """
+    ).fetchall()
+    CAMINHO_DADOS_JSON.write_text(
+        json.dumps(linhas, ensure_ascii=False, separators=(",", ":")),
+        encoding="utf-8",
+    )
 
 
 def consultar_veiculos(con, carro: str, codigo: str, tipo: str) -> dict:
@@ -450,6 +523,13 @@ def criar_handler(con):
                 self.send_header("Content-Length", str(len(corpo)))
                 self.end_headers()
                 self.wfile.write(corpo)
+            elif parsed.path == "/dados_fipe.json" and CAMINHO_DADOS_JSON.is_file():
+                corpo = CAMINHO_DADOS_JSON.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(corpo)))
+                self.end_headers()
+                self.wfile.write(corpo)
             else:
                 corpo = HTML_PAGINA.encode("utf-8")
                 self.send_response(200)
@@ -468,9 +548,11 @@ def criar_handler(con):
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     con = verificar_banco_e_tabela()
+    exportar_arquivos_estaticos(con)
     servidor = HTTPServer(("localhost", PORTA), criar_handler(con))
     url = f"http://localhost:{PORTA}"
 
+    print(f"Arquivos para GitHub Pages gerados: '{CAMINHO_INDEX_HTML.name}' e '{CAMINHO_DADOS_JSON.name}'")
     print(f"Visualização HTML da FIPE disponível em: {url}")
     print("Ctrl+C para encerrar")
     webbrowser.open(url)
@@ -486,4 +568,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

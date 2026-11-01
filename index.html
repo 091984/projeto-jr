@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Consulta Tabela FIPE — Setembro vs Outubro 2026</title>
+  <style>
+    :root {
+      --azul: #002776;
+      --verde: #009c3b;
+      --amarelo: #ffdf00;
+      --branco: #ffffff;
+      --cinza-claro: #f4f7fb;
+      --texto: #10203a;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    }
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, var(--verde) 0%, var(--amarelo) 50%, var(--azul) 100%);
+      background-attachment: fixed;
+      color: var(--texto);
+      padding: 24px 16px;
+    }
+    .container {
+      max-width: 1220px;
+      margin: 0 auto;
+    }
+    header {
+      background: linear-gradient(90deg, var(--azul) 0%, #0038a8 65%, var(--verde) 100%);
+      color: var(--branco);
+      border: 3px solid var(--amarelo);
+      border-radius: 14px;
+      padding: 22px 26px;
+      box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28);
+      margin-bottom: 20px;
+    }
+    header h1 {
+      font-size: 1.75rem;
+      color: var(--amarelo);
+      margin-bottom: 6px;
+    }
+    header p {
+      font-size: 0.96rem;
+      opacity: 0.95;
+    }
+    .painel-busca {
+      background: rgba(255, 255, 255, 0.96);
+      border-left: 8px solid var(--verde);
+      border-right: 8px solid var(--azul);
+      border-top: 3px solid var(--amarelo);
+      border-radius: 14px;
+      padding: 20px;
+      box-shadow: 0 8px 22px rgba(0, 0, 0, 0.2);
+      margin-bottom: 20px;
+    }
+    .campos {
+      display: grid;
+      grid-template-columns: 2fr 1.2fr 1fr auto;
+      gap: 12px;
+      align-items: end;
+    }
+    @media (max-width: 860px) {
+      .campos {
+        grid-template-columns: 1fr;
+      }
+    }
+    .grupo label {
+      display: block;
+      font-weight: 700;
+      font-size: 0.86rem;
+      color: var(--azul);
+      margin-bottom: 6px;
+    }
+    .grupo input, .grupo select {
+      width: 100%;
+      padding: 11px 13px;
+      border: 2px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 0.96rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .grupo input:focus, .grupo select:focus {
+      border-color: var(--verde);
+    }
+    button.btn-buscar {
+      background: linear-gradient(135deg, var(--verde), #007a2f);
+      color: var(--branco);
+      font-weight: 700;
+      border: 2px solid var(--amarelo);
+      border-radius: 8px;
+      padding: 11px 22px;
+      font-size: 0.98rem;
+      cursor: pointer;
+      transition: transform 0.1s, opacity 0.2s;
+    }
+    button.btn-buscar:hover {
+      opacity: 0.94;
+      transform: translateY(-1px);
+    }
+    .status-barra {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-top: 14px;
+      font-size: 0.9rem;
+      color: var(--azul);
+      font-weight: 600;
+    }
+    .resultados-box {
+      background: rgba(255, 255, 255, 0.97);
+      border-radius: 14px;
+      border-top: 5px solid var(--azul);
+      border-bottom: 5px solid var(--verde);
+      box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22);
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 900px;
+    }
+    thead {
+      background: var(--azul);
+      color: var(--amarelo);
+    }
+    th, td {
+      padding: 12px 14px;
+      text-align: left;
+      border-bottom: 1px solid #e2e8f0;
+      font-size: 0.9rem;
+    }
+    tbody tr:nth-child(even) {
+      background: var(--cinza-claro);
+    }
+    tbody tr:hover {
+      background: #fff9c4;
+    }
+    .tag-subiu {
+      background: #dcfce7;
+      color: #166534;
+      border: 1px solid #86efac;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .tag-caiu {
+      background: #fee2e2;
+      color: #991b1b;
+      border: 1px solid #fca5a5;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .tag-estavel {
+      background: #e0f2fe;
+      color: #075985;
+      border: 1px solid #7dd3fc;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .vazio {
+      padding: 32px;
+      text-align: center;
+      color: var(--azul);
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Consulta Tabela FIPE — Comparativo Setembro vs Outubro (2026)</h1>
+      <p>Fonte: <strong>refined.fipe_comparacao_set_out</strong> (fipe.duckdb) | Pesquise pelo nome do carro ou código FIPE</p>
+    </header>
+
+    <section class="painel-busca">
+      <form id="form-busca" onsubmit="executarBusca(event)">
+        <div class="campos">
+          <div class="grupo">
+            <label for="input-carro">Nome do Carro (Marca ou Modelo)</label>
+            <input id="input-carro" type="text" placeholder="Ex.: Corolla, Civic, Gol 1.0, Hilux..." />
+          </div>
+          <div class="grupo">
+            <label for="input-codigo">Código FIPE</label>
+            <input id="input-codigo" type="text" placeholder="Ex.: 002182-2" />
+          </div>
+          <div class="grupo">
+            <label for="select-tipo">Tipo de Veículo</label>
+            <select id="select-tipo">
+              <option value="carro">Carros</option>
+              <option value="">Todos</option>
+              <option value="moto">Motos</option>
+              <option value="caminhão">Caminhões</option>
+            </select>
+          </div>
+          <button type="submit" class="btn-buscar">Buscar na FIPE</button>
+        </div>
+      </form>
+      <div class="status-barra">
+        <span id="info-resultado">Carregando veículos...</span>
+      </div>
+    </section>
+
+    <section class="resultados-box">
+      <table>
+        <thead>
+          <tr>
+            <th>Tipo</th>
+            <th>Cód. FIPE</th>
+            <th>Marca</th>
+            <th>Modelo</th>
+            <th>Ano</th>
+            <th>Comb.</th>
+            <th>Setembro/2026</th>
+            <th>Outubro/2026</th>
+            <th>Diferença (R$)</th>
+            <th>Variação no Mês</th>
+          </tr>
+        </thead>
+        <tbody id="corpo-tabela">
+          <tr><td colspan="10" class="vazio">Digite o nome do carro ou código FIPE acima para consultar.</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </div>
+
+  <script>
+    let cacheEstatico = null;
+
+    function classeVariacao(texto) {
+      if (texto.startsWith("Subiu")) return "tag-subiu";
+      if (texto.startsWith("Caiu")) return "tag-caiu";
+      return "tag-estavel";
+    }
+
+    async function buscarDados(carro, codigo, tipo) {
+      try {
+        const params = new URLSearchParams({ carro, codigo, tipo });
+        const resp = await fetch("/api/busca?" + params.toString());
+        if (resp.ok) {
+          return await resp.json();
+        }
+      } catch (_) {
+        // Fallback automático para modo estático (GitHub Pages)
+      }
+
+      if (!cacheEstatico) {
+        const respJson = await fetch("dados_fipe.json");
+        cacheEstatico = await respJson.json();
+      }
+
+      const termos = carro ? carro.toLowerCase().split(/\s+/).filter(Boolean) : [];
+      const codFiltro = codigo ? codigo.toLowerCase() : "";
+
+      const filtrados = cacheEstatico.filter(r => {
+        if (tipo && r[0] !== tipo) return false;
+        if (codFiltro && !String(r[1] || "").toLowerCase().includes(codFiltro)) return false;
+        if (termos.length > 0) {
+          const marca = String(r[2] || "").toLowerCase();
+          const modelo = String(r[3] || "").toLowerCase();
+          for (const t of termos) {
+            if (!marca.includes(t) && !modelo.includes(t)) return false;
+          }
+        }
+        return true;
+      });
+
+      const itens = filtrados.slice(0, 100).map(r => ({
+        tipo_veiculo: r[0],
+        codigo_fipe: r[1],
+        nome_marca: r[2],
+        nome_modelo: r[3],
+        sigla_combustivel: r[4],
+        ano_modelo: r[5],
+        zero_km: r[6],
+        valor_formatado_set: r[7],
+        valor_formatado_out: r[8],
+        diferenca_reais: r[9],
+        variacao_percentual: r[10],
+        variacao_mes: r[11],
+      }));
+
+      return {
+        total_encontrado: filtrados.length,
+        itens,
+      };
+    }
+
+    async function executarBusca(event) {
+      if (event) event.preventDefault();
+      const carro = document.getElementById("input-carro").value.trim();
+      const codigo = document.getElementById("input-codigo").value.trim();
+      const tipo = document.getElementById("select-tipo").value;
+
+      const dados = await buscarDados(carro, codigo, tipo);
+      const infoResultado = document.getElementById("info-resultado");
+      const tbody = document.getElementById("corpo-tabela");
+
+      infoResultado.textContent = `Exibindo ${dados.itens.length} de ${dados.total_encontrado.toLocaleString("pt-BR")} registro(s) encontrado(s)`;
+
+      if (dados.itens.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" class="vazio">Nenhum veículo encontrado para os filtros informados.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = dados.itens.map(item => `
+        <tr>
+          <td>${item.tipo_veiculo}</td>
+          <td><strong>${item.codigo_fipe}</strong></td>
+          <td>${item.nome_marca}</td>
+          <td><strong>${item.nome_modelo}</strong></td>
+          <td>${item.zero_km === "true" ? "Zero KM" : (item.ano_modelo || "Zero KM")}</td>
+          <td>${String(item.sigla_combustivel || "").toUpperCase()}</td>
+          <td>${item.valor_formatado_set}</td>
+          <td><strong>${item.valor_formatado_out}</strong></td>
+          <td>R$ ${Number(item.diferenca_reais).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          <td><span class="${classeVariacao(item.variacao_mes)}">${item.variacao_mes}</span></td>
+        </tr>
+      `).join("");
+    }
+
+    window.addEventListener("DOMContentLoaded", () => executarBusca());
+  </script>
+</body>
+</html>
