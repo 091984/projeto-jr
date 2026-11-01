@@ -10,12 +10,10 @@ Regras e motivações:
    Fundo da página estilizado com as cores azul (#002776), verde (#009C3B) e
    amarelo (#FFDF00), garantindo contraste e legibilidade nos cartões e na tabela.
    Motivo: identidade visual brasileira para consulta da Tabela FIPE.
-3. BUSCA PELO NOME DO CARRO OU PLACA:
+3. BUSCA PELO NOME DO CARRO OU CÓDIGO FIPE:
    - Busca por nome do carro: filtra por marca e/ou modelo (`nome_marca`, `nome_modelo`)
      de forma parcial e case-insensitive.
-   - Busca por placa ou código FIPE: identifica formato de placa (`ABC-1234` ou
-     Mercosul `ABC1D23`) ou `codigo_fipe`, exibindo a placa consultada no topo do
-     resultado junto ao veículo pesquisado.
+   - Busca por código FIPE: filtra por `codigo_fipe` (ex.: `002182-2`).
    Motivo: permitir localizar rapidamente qualquer veículo entre os 51.003
    registros sem travar o navegador.
 4. EXIBIÇÃO DO RESULTADO NA TELA:
@@ -33,9 +31,7 @@ Regras e motivações:
      traceback.
 """
 
-import hashlib
 import json
-import re
 import sys
 import urllib.parse
 import webbrowser
@@ -44,7 +40,6 @@ from pipeline.db import PASTA_RAW, conectar
 
 CAMINHO_BANCO = PASTA_RAW.parent / "fipe.duckdb"
 PORTA = 8000
-PADRAO_PLACA = re.compile(r"^[A-Z]{3}-?[0-9][A-Z0-9][0-9]{2}$", re.IGNORECASE)
 
 HTML_PAGINA = """<!DOCTYPE html>
 <html lang="pt-BR">
@@ -240,7 +235,7 @@ HTML_PAGINA = """<!DOCTYPE html>
   <div class="container">
     <header>
       <h1>Consulta Tabela FIPE — Comparativo Setembro vs Outubro (2026)</h1>
-      <p>Fonte: <strong>refined.fipe_comparacao_set_out</strong> (fipe.duckdb) | Pesquise pelo nome do carro, placa ou código FIPE</p>
+      <p>Fonte: <strong>refined.fipe_comparacao_set_out</strong> (fipe.duckdb) | Pesquise pelo nome do carro ou código FIPE</p>
     </header>
 
     <section class="painel-busca">
@@ -251,8 +246,8 @@ HTML_PAGINA = """<!DOCTYPE html>
             <input id="input-carro" type="text" placeholder="Ex.: Corolla, Civic, Gol 1.0, Hilux..." />
           </div>
           <div class="grupo">
-            <label for="input-placa">Placa ou Código FIPE</label>
-            <input id="input-placa" type="text" placeholder="Ex.: ABC-1234, BRA2E19 ou 002182-2" />
+            <label for="input-codigo">Código FIPE</label>
+            <input id="input-codigo" type="text" placeholder="Ex.: 002182-2" />
           </div>
           <div class="grupo">
             <label for="select-tipo">Tipo de Veículo</label>
@@ -268,7 +263,6 @@ HTML_PAGINA = """<!DOCTYPE html>
       </form>
       <div class="status-barra">
         <span id="info-resultado">Carregando veículos...</span>
-        <span id="info-placa"></span>
       </div>
     </section>
 
@@ -289,7 +283,7 @@ HTML_PAGINA = """<!DOCTYPE html>
           </tr>
         </thead>
         <tbody id="corpo-tabela">
-          <tr><td colspan="10" class="vazio">Digite o nome do carro ou placa acima para consultar.</td></tr>
+          <tr><td colspan="10" class="vazio">Digite o nome do carro ou código FIPE acima para consultar.</td></tr>
         </tbody>
       </table>
     </section>
@@ -305,24 +299,17 @@ HTML_PAGINA = """<!DOCTYPE html>
     async function executarBusca(event) {
       if (event) event.preventDefault();
       const carro = document.getElementById("input-carro").value.trim();
-      const placa = document.getElementById("input-placa").value.trim();
+      const codigo = document.getElementById("input-codigo").value.trim();
       const tipo = document.getElementById("select-tipo").value;
 
-      const params = new URLSearchParams({ carro, placa, tipo });
+      const params = new URLSearchParams({ carro, codigo, tipo });
       const resp = await fetch("/api/busca?" + params.toString());
       const dados = await resp.json();
 
       const infoResultado = document.getElementById("info-resultado");
-      const infoPlaca = document.getElementById("info-placa");
       const tbody = document.getElementById("corpo-tabela");
 
       infoResultado.textContent = `Exibindo ${dados.itens.length} de ${dados.total_encontrado.toLocaleString("pt-BR")} registro(s) encontrado(s)`;
-
-      if (dados.placa_detectada) {
-        infoPlaca.innerHTML = `Placa consultada: <span class="badge-placa">${dados.placa_detectada}</span>`;
-      } else {
-        infoPlaca.innerHTML = "";
-      }
 
       if (dados.itens.length === 0) {
         tbody.innerHTML = '<tr><td colspan="10" class="vazio">Nenhum veículo encontrado para os filtros informados.</td></tr>';
@@ -378,10 +365,9 @@ def verificar_banco_e_tabela():
     return con
 
 
-def consultar_veiculos(con, carro: str, placa: str, tipo: str) -> dict:
+def consultar_veiculos(con, carro: str, codigo: str, tipo: str) -> dict:
     filtros = []
     params = []
-    placa_detectada = None
 
     if tipo:
         filtros.append("tipo_veiculo = ?")
@@ -392,31 +378,9 @@ def consultar_veiculos(con, carro: str, placa: str, tipo: str) -> dict:
             filtros.append("(nome_marca ILIKE ? OR nome_modelo ILIKE ?)")
             params.extend([f"%{termo}%", f"%{termo}%"])
 
-    if placa:
-        placa_limpa = placa.strip().upper()
-        if PADRAO_PLACA.match(placa_limpa):
-            placa_formatada = (
-                f"{placa_limpa[:3]}-{placa_limpa[3:]}"
-                if "-" not in placa_limpa
-                else placa_limpa
-            )
-            placa_detectada = placa_formatada
-            # Se o usuário digitou apenas a placa (sem nome do carro), vincula de forma determinística
-            # um código FIPE da tabela para exibir o resultado na tela
-            if not carro:
-                codigos = [
-                    r[0]
-                    for r in con.execute(
-                        "SELECT DISTINCT codigo_fipe FROM refined.fipe_comparacao_set_out ORDER BY codigo_fipe"
-                    ).fetchall()
-                ]
-                if codigos:
-                    idx = int(hashlib.md5(placa_limpa.replace("-", "").encode()).hexdigest(), 16) % len(codigos)
-                    filtros.append("codigo_fipe = ?")
-                    params.append(codigos[idx])
-        else:
-            filtros.append("codigo_fipe ILIKE ?")
-            params.append(f"%{placa_limpa}%")
+    if codigo:
+        filtros.append("codigo_fipe ILIKE ?")
+        params.append(f"%{codigo.strip()}%")
 
     where_sql = f"WHERE {' AND '.join(filtros)}" if filtros else ""
 
@@ -466,7 +430,6 @@ def consultar_veiculos(con, carro: str, placa: str, tipo: str) -> dict:
 
     return {
         "total_encontrado": total_encontrado,
-        "placa_detectada": placa_detectada,
         "itens": itens,
     }
 
@@ -478,9 +441,9 @@ def criar_handler(con):
             if parsed.path == "/api/busca":
                 qs = urllib.parse.parse_qs(parsed.query)
                 carro = qs.get("carro", [""])[0]
-                placa = qs.get("placa", [""])[0]
+                codigo = qs.get("codigo", [""])[0]
                 tipo = qs.get("tipo", [""])[0]
-                resposta = consultar_veiculos(con, carro, placa, tipo)
+                resposta = consultar_veiculos(con, carro, codigo, tipo)
                 corpo = json.dumps(resposta, ensure_ascii=False).encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")

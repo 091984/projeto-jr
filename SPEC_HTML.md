@@ -33,10 +33,10 @@ uv run python -m pipeline.visualizacao_html
 - A página HTML deve utilizar paleta com as cores de fundo **azul, verde e amarelo** (ex.: gradiente ou seções combinando Azul `#002776`, Verde `#009C3B` e Amarelo `#FFDF00`, com contraste legível nos cartões e na tabela de resultados).
 - **Motivo:** identidade visual temática para consulta da Tabela FIPE nacional, destacando cabeçalho, barra de pesquisa e indicadores de variação mensal.
 
-### 3. BUSCA PELO NOME DO CARRO OU PLACA
+### 3. BUSCA PELO NOME DO CARRO OU CÓDIGO FIPE
 - A interface deve exibir um campo de busca interativo com filtro por:
   1. **Nome do carro (Marca / Modelo):** busca parcial e insensível a maiúsculas/minúsculas (`ILIKE`) em `nome_marca` e `nome_modelo` (ex.: `"Corolla"`, `"Toyota Corolla"`, `"Gol 1.0"`).
-  2. **Placa ou Código FIPE:** aceita formato de placa brasileira (antiga `ABC-1234` ou Mercosul `ABC1D23`) e/ou `codigo_fipe` (`002182-2`). Como a base pública da FIPE é tabelada por modelo e não possui cadastro individual de placas do SENATRAN, quando o usuário digitar uma placa válida, o sistema deve exibir o aviso da placa consultada junto ao filtro de modelo/veículo correspondente (ou permitir vincular a placa na consulta na tela).
+  2. **Código FIPE:** busca por `codigo_fipe` (ex.: `"002182-2"`).
 - Opcionalmente, seletor de **Ano (`ano_modelo`)** e **Tipo de Veículo (`carro`, `moto`, `caminhão`)** para refinar o resultado na tela.
 - **Motivo:** permitir que o usuário encontre rapidamente qualquer veículo entre os `51.003` registros sem travar o navegador.
 
@@ -59,7 +59,7 @@ uv run python -m pipeline.visualizacao_html
 
 ## CRITÉRIOS DE ACEITE
 - Rodar o comando abre a página HTML no navegador com o fundo nas cores azul, verde e amarelo.
-- Digitar o nome de um carro (ex.: `"Corolla"` ou `"Civic"`) ou placa/código exibe imediatamente os resultados correspondentes de `refined.fipe_comparacao_set_out` na tela com os preços de setembro, outubro e a variação mensal.
+- Digitar o nome de um carro (ex.: `"Corolla"` ou `"Civic"`) ou código FIPE exibe imediatamente os resultados correspondentes de `refined.fipe_comparacao_set_out` na tela com os preços de setembro, outubro e a variação mensal.
 - `Ctrl+C` no terminal encerra o servidor sem traceback e libera o arquivo `fipe.duckdb`.
 - Se a tabela `refined.fipe_comparacao_set_out` não existir, o script para com mensagem clara e `sys.exit(1)`.
 
